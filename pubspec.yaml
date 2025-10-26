@@ -34,6 +34,16 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  firebase_core: ^4.2.0
+  firebase_auth: ^6.1.1
+  cloud_firestore: ^6.0.3
+  firebase_storage: ^13.0.3
+  provider: ^6.1.5+1
+  image_picker: ^1.2.0
+  intl: ^0.20.2
+  carousel_slider: ^5.1.1
+  file_picker: ^10.3.3
+  url_launcher: ^6.3.2 # Hoặc phiên bản mới nhất
 
 dev_dependencies:
   flutter_test:
@@ -56,7 +66,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
+  # Thêm phần assets ngay dưới đây
+  assets: # <--- Thụt vào 2 dấu cách
+    - assets/ # <--- Thụt vào 4 dấu cách, có "- " ở đầu
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

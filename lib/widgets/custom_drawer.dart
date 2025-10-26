@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+//import 'package{packageName}/{projectName}/lib/widgets/custom_drawer.dart';
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final authService = AuthService();
+    final user = authService.currentUser;
+
     return Drawer(
       child: Column(
         children: [
@@ -12,7 +17,7 @@ class CustomDrawer extends StatelessWidget {
           UserAccountsDrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue[700]!, Colors.blue[300]!],
+                colors: [Colors.orange[700]!, Colors.orange[300]!],
               ),
             ),
             currentAccountPicture: const CircleAvatar(
@@ -20,14 +25,14 @@ class CustomDrawer extends StatelessWidget {
               child: Icon(
                 Icons.person,
                 size: 50,
-                color: Colors.blue,
+                color: Colors.orange,
               ),
             ),
-            accountName: const Text(
-              'Nguyễn Văn A',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            accountName: Text(
+              user?.displayName ?? 'Người dùng',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            accountEmail: const Text('nguyenvana@example.com'),
+            accountEmail: Text(user?.email ?? ''),
           ),
 
           // Menu items
@@ -49,10 +54,8 @@ class CustomDrawer extends StatelessWidget {
                   icon: Icons.work_outline,
                   title: 'Việc làm của tôi',
                   onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chức năng đang phát triển')),
-                    );
+                    Navigator.pop(context); // Đóng Drawer
+                    Navigator.pushNamed(context, '/my_jobs'); // Mở màn hình mới
                   },
                 ),
                 _buildMenuItem(
@@ -70,20 +73,16 @@ class CustomDrawer extends StatelessWidget {
                   title: 'Việc làm đã lưu',
                   onTap: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chức năng đang phát triển')),
-                    );
+                    Navigator.pushNamed(context, '/saved_jobs');
                   },
                 ),
                 _buildMenuItem(
                   context,
                   icon: Icons.people_outline,
-                  title: 'Ứng viên',
+                  title: 'Ứng Tuyển',
                   onTap: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chức năng đang phát triển')),
-                    );
+                    Navigator.pushNamed(context, '/my_applications');
                   },
                 ),
                 const Divider(),
@@ -93,9 +92,7 @@ class CustomDrawer extends StatelessWidget {
                   title: 'Cài đặt',
                   onTap: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chức năng đang phát triển')),
-                    );
+                    Navigator.pushNamed(context, '/profile');
                   },
                 ),
                 _buildMenuItem(
@@ -103,10 +100,9 @@ class CustomDrawer extends StatelessWidget {
                   icon: Icons.help_outline,
                   title: 'Trợ giúp',
                   onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chức năng đang phát triển')),
-                    );
+                    // === THAY ĐỔI Ở ĐÂY ===
+                    Navigator.pop(context); // Đóng drawer
+                    Navigator.pushNamed(context, '/help'); // Mở màn hình mới
                   },
                 ),
                 _buildMenuItem(
@@ -114,8 +110,9 @@ class CustomDrawer extends StatelessWidget {
                   icon: Icons.info_outline,
                   title: 'Giới thiệu',
                   onTap: () {
-                    Navigator.pop(context);
-                    _showAboutDialog(context);
+                    // === THAY ĐỔI Ở ĐÂY ===
+                    Navigator.pop(context); // Đóng drawer
+                    Navigator.pushNamed(context, '/about'); // Mở màn hình mới
                   },
                 ),
               ],
@@ -134,7 +131,7 @@ class CustomDrawer extends StatelessWidget {
                 style: TextStyle(color: Colors.red),
               ),
               onTap: () {
-                _showLogoutDialog(context);
+                _showLogoutDialog(context, authService);
               },
             ),
           ),
@@ -157,7 +154,7 @@ class CustomDrawer extends StatelessWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
+  void _showLogoutDialog(BuildContext context, AuthService authService) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -169,7 +166,8 @@ class CustomDrawer extends StatelessWidget {
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              await authService.signOut();
               Navigator.pop(context);
               Navigator.pushReplacementNamed(context, '/login');
             },

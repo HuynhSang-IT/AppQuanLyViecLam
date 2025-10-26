@@ -1,7 +1,14 @@
+// screens/post_job_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Đã thêm import
+import '../models/job_model.dart';
+import '../services/job_service.dart';
 
 class PostJobScreen extends StatefulWidget {
-  const PostJobScreen({Key? key}) : super(key: key);
+  final Job? existingJob;
+  const PostJobScreen({Key? key, this.existingJob}) : super(key: key);
 
   @override
   State<PostJobScreen> createState() => _PostJobScreenState();
@@ -9,6 +16,7 @@ class PostJobScreen extends StatefulWidget {
 
 class _PostJobScreenState extends State<PostJobScreen> {
   final _formKey = GlobalKey<FormState>();
+  final JobService _jobService = JobService();
   final _titleController = TextEditingController();
   final _companyController = TextEditingController();
   final _locationController = TextEditingController();
@@ -21,20 +29,33 @@ class _PostJobScreenState extends State<PostJobScreen> {
   String _selectedLevel = 'Nhân viên';
   bool _isLoading = false;
 
+  bool _isEditing = false;
+  Job? _existingJob;
+
   final List<String> _jobTypes = [
-    'Toàn thời gian',
-    'Bán thời gian',
-    'Thực tập',
-    'Freelance',
+    'Toàn thời gian', 'Bán thời gian', 'Thực tập', 'Freelance',
+  ];
+  final List<String> _levels = [
+    'Thực tập sinh', 'Nhân viên', 'Trưởng nhóm', 'Quản lý', 'Giám đốc',
   ];
 
-  final List<String> _levels = [
-    'Thực tập sinh',
-    'Nhân viên',
-    'Trưởng nhóm',
-    'Quản lý',
-    'Giám đốc',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _existingJob = widget.existingJob;
+    if (_existingJob != null) {
+      _isEditing = true;
+      _titleController.text = _existingJob!.title;
+      _companyController.text = _existingJob!.company;
+      _locationController.text = _existingJob!.location;
+      _salaryController.text = _existingJob!.salary;
+      _descriptionController.text = _existingJob!.description;
+      _requirementsController.text = _existingJob!.requirements ?? '';
+      _benefitsController.text = _existingJob!.benefits ?? '';
+      _selectedJobType = _existingJob!.jobType ?? 'Toàn thời gian';
+      _selectedLevel = _existingJob!.level ?? 'Nhân viên';
+    }
+  }
 
   @override
   void dispose() {
@@ -49,27 +70,85 @@ class _PostJobScreenState extends State<PostJobScreen> {
   }
 
   void _handlePostJob() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Giả lập đăng việc
-      await Future.delayed(const Duration(seconds: 2));
+    setState(() {
+      _isLoading = true;
+    });
 
-      setState(() {
-        _isLoading = false;
-      });
-
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() { _isLoading = false; });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Đăng việc làm thành công!'),
-            backgroundColor: Colors.green,
+            content: Text('Bạn không được xác thực. Vui lòng đăng nhập lại.'),
+            backgroundColor: Colors.red,
           ),
         );
-        Navigator.pop(context);
       }
+      return;
+    }
+
+    Map<String, dynamic> jobData = {
+      'title': _titleController.text,
+      'company': _companyController.text,
+      'location': _locationController.text,
+      'salary': _salaryController.text,
+      'description': _descriptionController.text,
+      'requirements': _requirementsController.text,
+      'benefits': _benefitsController.text.isNotEmpty ? _benefitsController.text : 'Không có',
+      'jobType': _selectedJobType,
+      'level': _selectedLevel,
+      'postedBy': user.uid,
+    };
+
+    try {
+      Map<String, dynamic> response;
+      if (_isEditing) {
+        jobData['updatedAt'] = FieldValue.serverTimestamp();
+        response = await _jobService.updateJob(_existingJob!.id, jobData);
+      } else {
+        response = await _jobService.addJob(
+          title: jobData['title'],
+          company: jobData['company'],
+          location: jobData['location'],
+          salary: jobData['salary'],
+          description: jobData['description'],
+          requirements: jobData['requirements'],
+          benefits: jobData['benefits'],
+          jobType: jobData['jobType'],
+          level: jobData['level'],
+          userId: jobData['postedBy'],
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] as String),
+            backgroundColor: response['success'] ? Colors.green : Colors.red,
+          ),
+        );
+        if (response['success']) {
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã xảy ra lỗi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -77,8 +156,12 @@ class _PostJobScreenState extends State<PostJobScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Đăng Việc Làm'),
-        elevation: 0,
+        title: Text(_isEditing ? 'Sửa Việc Làm' : 'Đăng Việc Làm'),
+        // --- THÊM MÀU CAM ---
+        backgroundColor: Colors.orange[700],
+        foregroundColor: Colors.white,
+        elevation: 1, // Thêm shadow nhẹ
+        // --- KẾT THÚC THÊM ---
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -100,9 +183,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
                     color: Colors.white,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Đăng tin tuyển dụng mới',
-                    style: TextStyle(
+                  Text(
+                    _isEditing ? 'Chỉnh sửa tin tuyển dụng' : 'Đăng tin tuyển dụng mới',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -128,10 +211,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Thông tin cơ bản
                     _buildSectionTitle('Thông tin cơ bản'),
                     const SizedBox(height: 12),
-
                     _buildTextField(
                       controller: _titleController,
                       label: 'Tiêu đề công việc',
@@ -143,9 +224,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
                         }
                         return null;
                       },
+                      
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: _companyController,
                       label: 'Tên công ty',
@@ -159,7 +240,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     Row(
                       children: [
                         Expanded(
@@ -190,7 +270,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: _locationController,
                       label: 'Địa điểm',
@@ -204,7 +283,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: _salaryController,
                       label: 'Mức lương',
@@ -218,11 +296,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       },
                     ),
                     const SizedBox(height: 24),
-
-                    // Mô tả công việc
                     _buildSectionTitle('Mô tả công việc'),
                     const SizedBox(height: 12),
-
                     _buildTextField(
                       controller: _descriptionController,
                       label: 'Mô tả chi tiết',
@@ -237,7 +312,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: _requirementsController,
                       label: 'Yêu cầu ứng viên',
@@ -252,7 +326,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: _benefitsController,
                       label: 'Quyền lợi',
@@ -262,16 +335,19 @@ class _PostJobScreenState extends State<PostJobScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Submit button
+                    // Submit button (ĐỔI MÀU)
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 55, // To hơn
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _handlePostJob,
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[700], // <-- MÀU CAM
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(15),
                           ),
+                          elevation: 3,
                         ),
                         child: _isLoading
                             ? const SizedBox(
@@ -284,14 +360,14 @@ class _PostJobScreenState extends State<PostJobScreen> {
                                   ),
                                 ),
                               )
-                            : const Row(
+                            : Row( // <-- Đã xóa CONST ở đây
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.publish),
-                                  SizedBox(width: 8),
+                                  Icon(_isEditing ? Icons.save : Icons.publish), // <-- Dùng biến, không 'const'
+                                  const SizedBox(width: 8),
                                   Text(
-                                    'Đăng Việc Làm',
-                                    style: TextStyle(fontSize: 16),
+                                    _isEditing ? 'Lưu Thay Đổi' : 'Đăng Việc Làm', // <-- Dùng biến, không 'const'
+                                    style: const TextStyle(fontSize: 16),
                                   ),
                                 ],
                               ),
@@ -304,17 +380,15 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       width: double.infinity,
                       height: 50,
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
+                        onPressed: () {Navigator.pop(context);},
                         style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[600], // Màu chữ xám
+                          side: BorderSide(color: Colors.grey[300]!), // Viền xám nhạt
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(15),
                           ),
                         ),
-                        child: const Text(
-                          'Hủy',
-                          style: TextStyle(fontSize: 16),
+                        child: const Text('Hủy',style: TextStyle(fontSize: 16),
                         ),
                       ),
                     ),
@@ -363,7 +437,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
-      decoration: InputDecoration(
+      decoration: InputDecoration( // <-- Đã xóa CONST (nếu có)
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon),
@@ -385,7 +459,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
   }) {
     return DropdownButtonFormField<String>(
       value: value,
-      decoration: InputDecoration(
+      decoration: InputDecoration( // <-- Đã xóa CONST (nếu có)
         labelText: label,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

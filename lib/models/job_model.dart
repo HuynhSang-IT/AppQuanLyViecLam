@@ -6,6 +6,12 @@ class Job {
   final String salary;
   final String description;
   final DateTime postedDate;
+  final String? requirements;
+  final String? benefits;
+  final String? jobType;
+  final String? level;
+  final String? postedBy;
+  final String? status;
 
   Job({
     required this.id,
@@ -15,34 +21,62 @@ class Job {
     required this.salary,
     required this.description,
     required this.postedDate,
+    this.requirements,
+    this.benefits,
+    this.jobType,
+    this.level,
+    this.postedBy,
+    this.status,
   });
 
-  int getDaysAgo() {
+  String getPostedDateAgo() {
     final difference = DateTime.now().difference(postedDate);
-    return difference.inDays;
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays} ngày trước';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} giờ trước';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} phút trước';
+    } else {
+      return 'Vừa xong';
+    }
   }
 
-  Map<String, dynamic> toJson() {
+  // Tạo Job từ Firestore
+  factory Job.fromFirestore(Map<String, dynamic> data) {
+    return Job(
+      id: data['id'] ?? '',
+      title: data['title'] ?? '',
+      company: data['company'] ?? '',
+      location: data['location'] ?? '',
+      salary: data['salary'] ?? '',
+      description: data['description'] ?? '',
+      postedDate: data['postedDate'] ?? DateTime.now(),
+      requirements: data['requirements'],
+      benefits: data['benefits'],
+      jobType: data['jobType'],
+      level: data['level'],
+      postedBy: data['postedBy'],
+      status: data['status'] ?? 'active',
+    );
+  }
+
+  // Chuyển Job thành Map để lưu Firestore
+  Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'title': title,
       'company': company,
       'location': location,
       'salary': salary,
       'description': description,
-      'postedDate': postedDate.toIso8601String(),
+      'postedDate': postedDate,
+      'requirements': requirements,
+      'benefits': benefits,
+      'jobType': jobType,
+      'level': level,
+      'postedBy': postedBy,
+      'status': status,
     };
-  }
-
-  factory Job.fromJson(Map<String, dynamic> json) {
-    return Job(
-      id: json['id'],
-      title: json['title'],
-      company: json['company'],
-      location: json['location'],
-      salary: json['salary'],
-      description: json['description'],
-      postedDate: DateTime.parse(json['postedDate']),
-    );
   }
 }
