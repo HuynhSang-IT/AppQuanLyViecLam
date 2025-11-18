@@ -36,6 +36,13 @@ class JobService {
         'applicationCount': 0,
       });
 
+      // === ĐOẠN MỚI THÊM VÀO: TỰ ĐỘNG CẬP NHẬT DANH SÁCH ĐỊA ĐIỂM ===
+      // arrayUnion giúp chỉ thêm nếu chưa có (tránh trùng lặp)
+      await _firestore.collection('attributes').doc('locations').set({
+        'values': FieldValue.arrayUnion([location])
+      }, SetOptions(merge: true));
+      // === KẾT THÚC ĐOẠN MỚI ===
+      
       return {
         'success': true,
         'message': 'Đăng việc làm thành công!',
@@ -99,26 +106,41 @@ class JobService {
     });
   }
 
-  // 4. LẤY VIỆC LÀM (CÓ TÌM KIẾM) BẰNG STREAM (PHIÊN BẢN ĐÃ SỬA)
-  Stream<List<Job>> getJobsStream({String query = ''}) {
+  // 4. LẤY VIỆC LÀM (CÓ TÌM KIẾM + BỘ LỌC)
+  Stream<List<Job>> getJobsStream({
+    String query = '',
+    String? location,
+    String? jobType,
+    String? level,
+  }) {
     // Bắt đầu với một truy vấn cơ bản
     Query jobsQuery = _firestore
         .collection('jobs')
-        .where('status', isEqualTo: 'active'); // <-- 1. Luôn lọc 'status' trước
+        .where('status', isEqualTo: 'active'); // <-- Luôn lọc 'status' trước
+
+    // --- LOGIC LỌC MỚI ---  
+    // Thêm các bộ lọc nếu chúng được cung cấp
+    if (location != null && location.isNotEmpty) {
+      jobsQuery = jobsQuery.where('location', isEqualTo: location);
+    }
+    if (jobType != null && jobType.isNotEmpty) {
+      jobsQuery = jobsQuery.where('jobType', isEqualTo: jobType);
+    }
+    if (level != null && level.isNotEmpty) {
+      jobsQuery = jobsQuery.where('level', isEqualTo: level);
+    }
+    // --- KẾT THÚC LOGIC LỌC ---
 
     if (query.isNotEmpty) {
       String queryLower = query.toLowerCase();
       // NẾU CÓ TÌM KIẾM:
       jobsQuery = jobsQuery
-          // 2. Sắp xếp theo title_lowercase (trường đang lọc)
-          .orderBy('title_lowercase') 
+          .orderBy('title_lowercase')
           .where('title_lowercase', isGreaterThanOrEqualTo: queryLower)
           .where('title_lowercase', isLessThanOrEqualTo: '$queryLower\uf8ff')
-          // 3. Sắp xếp phụ theo postedDate
-          .orderBy('postedDate', descending: true);
+          .orderBy('postedDate', descending: true); // Sắp xếp phụ
     } else {
       // NẾU KHÔNG TÌM KIẾM:
-      // 2. Chỉ cần sắp xếp theo postedDate
       jobsQuery = jobsQuery.orderBy('postedDate', descending: true);
     }
 
@@ -302,6 +324,20 @@ class JobService {
     }
   }
 
+  // 12. CẬP NHẬT TRẠNG THÁI ỨNG TUYỂN
+  Future<bool> updateApplicationStatus(String applicationId, String newStatus) async {
+    try {
+      await _firestore
+          .collection('applications')
+          .doc(applicationId)
+          .update({'status': newStatus});
+      return true;
+    } catch (e) {
+      print('Lỗi khi cập nhật trạng thái ứng tuyển: $e');
+      return false;
+    }
+  }
+
   // 13. LẤY CHI TIẾT CÁC VIỆC LÀM ĐÃ LƯU
   Future<List<Job>> getFavoriteJobs(String userId) async {
     try {
@@ -352,6 +388,37 @@ class JobService {
         data['id'] = doc.id;
         return data;
       }).toList();
+    });
+  }
+
+  //15. Stream lấy danh sách đơn ứng tuyển CỦA APPLICANT
+Stream<List<Map<String, dynamic>>> getMyApplications(String userId) {
+  return _firestore
+      .collection('applications')
+      .where('userId', isEqualTo: userId)
+      .orderBy('appliedDate', descending: true)
+      .snapshots()
+      .map((snapshot) {
+    return snapshot.docs.map((doc) {
+      Map<String, dynamic> data = doc.data();
+      data['id'] = doc.id;
+      return data;
+    }).toList();
+  });
+}
+
+// --- 16 THÊM HÀM NÀY ĐỂ LẤY DANH SÁCH ĐỊA ĐIỂM ---
+  Stream<List<String>> getLocationsStream() {
+    return _firestore
+        .collection('attributes') // Tạo một collection riêng tên là attributes
+        .doc('locations')         // Một document tên là locations
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        // Lấy mảng 'values' ra và chuyển thành List<String>
+        return List<String>.from(snapshot.data()!['values'] ?? []);
+      }
+      return ['Cần Thơ', 'Hà Nội', 'Hồ Chí Minh']; // Dữ liệu mặc định nếu chưa có gì
     });
   }
 }

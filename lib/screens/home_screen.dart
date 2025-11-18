@@ -8,6 +8,7 @@ import '../models/job_model.dart';
 import '../services/job_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart'; // Service cho badge
+import '../widgets/job_skeleton.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -27,6 +28,19 @@ class _HomeScreenState extends State<HomeScreen> {
   late Stream<List<Job>> _jobsStream;
   Timer? _debounce;
 
+  // --- THÊM BIẾN LỌC ---
+  String? _selectedLocation;
+  String? _selectedJobType;
+  String? _selectedLevel;
+
+  // Dùng để đếm số bộ lọc đang áp dụng
+  int get _filterCount {
+    int count = 0;
+    if (_selectedLocation != null) count++;
+    if (_selectedJobType != null) count++;
+    if (_selectedLevel != null) count++;
+    return count;
+  }
   // --- Logic Badge Thông báo ---
   late String _userId;
   late Stream<int> _unreadCountStream;
@@ -75,7 +89,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Lắng nghe stream job từ service và đẩy data vào StreamController
   void _fetchJobs(String query) {
-     _jobService.getJobsStream(query: query).listen(
+     _jobService.getJobsStream(
+      query: query,
+      // --- TRUYỀN CÁC BIẾN LỌC ---
+      location: _selectedLocation,
+      jobType: _selectedJobType,
+      level: _selectedLevel,
+      // --- KẾT THÚC ---
+     ).listen(
       (jobs) {
         if (!_jobsStreamController.isClosed) {
           _jobsStreamController.add(jobs);
@@ -119,6 +140,17 @@ class _HomeScreenState extends State<HomeScreen> {
               snap: false,
               forceElevated: innerBoxIsScrolled,
               actions: [
+                // --- THÊM NÚT LỌC ---
+                 IconButton(
+                   icon: Badge(
+                     label: Text('$_filterCount'),
+                     isLabelVisible: _filterCount > 0,
+                     child: const Icon(Icons.filter_list),
+                   ),
+                   tooltip: 'Lọc việc làm',
+                   onPressed: _showFilterModal, // Sẽ tạo hàm này ở bước d
+                 ),
+
                  StreamBuilder<int>(
                    stream: _unreadCountStream,
                    initialData: 0,
@@ -192,10 +224,10 @@ class _HomeScreenState extends State<HomeScreen> {
                          CarouselSlider(
                            //carouselController: _bannerController, // Đã kiểm tra tên biến
                            options: CarouselOptions(
-                             height: 700.0,
+                             height: 300.0,
                              autoPlay: true,
                              autoPlayInterval: const Duration(seconds: 4),
-                             autoPlayAnimationDuration: const Duration(milliseconds: 800),
+                             autoPlayAnimationDuration: const Duration(milliseconds: 400),
                              autoPlayCurve: Curves.fastOutSlowIn,
                              enlargeCenterPage: true,
                              viewportFraction: 0.9,
@@ -309,7 +341,12 @@ class _HomeScreenState extends State<HomeScreen> {
            // --- CODE STREAMBUILDER ĐẦY ĐỦ ---
            builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting && _totalJobs == 0) {
-                return const Center(child: CircularProgressIndicator(color: Colors.orange));
+               // Thay vì CircularProgressIndicator, ta hiển thị danh sách giả
+  return ListView.builder(
+    padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 80.0),
+    itemCount: 5, // Hiển thị 5 cái skeleton
+    itemBuilder: (context, index) => const JobSkeleton(),
+  );
               }
               if (snapshot.hasError) {
                 return Center(
@@ -609,6 +646,192 @@ class _HomeScreenState extends State<HomeScreen> {
     );
      // --- KẾT THÚC _showJobDetails ---
   }
+  // HÀM MỚI: HIỂN THỊ CỬA SỔ LỌC
+  void _showFilterModal() {
+    // Dùng StatefulBuilder để modal tự cập nhật khi người dùng chọn
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        // Biến tạm thời, chỉ áp dụng khi nhấn "Lưu"
+        String? tempLocation = _selectedLocation;
+        String? tempJobType = _selectedJobType;
+        String? tempLevel = _selectedLevel;
 
+        // Dữ liệu mẫu - bạn có thể lấy động từ Firestore nếu muốn
+        final List<String> locations = ['Cần Thơ', 'Hà Nội', 'TP.Hồ Chí Minh', 'Đà Nẵng'];
+        final List<String> jobTypes = ['Toàn thời gian', 'Bán thời gian', 'Thực tập', 'Freelance'];
+        final List<String> levels = ['Thực tập sinh', 'Nhân viên', 'Trưởng nhóm', 'Quản lý'];
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6, // Chiều cao ban đầu
+              maxChildSize: 0.9,     // Chiều cao tối đa
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Bộ lọc việc làm',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Nội dung lọc (có thể cuộn)
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        children: [
+                          // === Dùng StreamBuilder cho Địa điểm ===
+                          StreamBuilder<List<String>>(
+                            stream: _jobService.getLocationsStream(),
+                            builder: (context, snapshot) {
+                              List<String> locations = [];
+                              if (snapshot.hasData) {
+                                locations = snapshot.data!;
+                                // Sắp xếp A-Z cho đẹp
+                                locations.sort(); 
+                              } else {
+                                // Trong lúc chờ tải, hiện tạm danh sách cũ
+                                locations = ['Cần Thơ', 'Hà Nội', 'Hồ Chí Minh'];
+                              }
+                              return _buildFilterDropdown(
+                                label: 'Địa điểm',
+                                icon: Icons.location_on_outlined,
+                                value: tempLocation,
+                                // Nếu địa điểm đang chọn không còn trong danh sách mới, reset về null
+                                items: locations,
+                                onChanged: (val) => setModalState(() => tempLocation = val),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFilterDropdown(
+                            label: 'Hình thức làm việc',
+                            icon: Icons.timer_outlined,
+                            value: tempJobType,
+                            items: jobTypes,
+                            onChanged: (val) => setModalState(() => tempJobType = val),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFilterDropdown(
+                            label: 'Cấp bậc',
+                            icon: Icons.leaderboard_outlined,
+                            value: tempLevel,
+                            items: levels,
+                            onChanged: (val) => setModalState(() => tempLevel = val),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Nút bấm
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  tempLocation = null;
+                                  tempJobType = null;
+                                  tempLevel = null;
+                                });
+                                // Áp dụng ngay
+                                setState(() {
+                                  _selectedLocation = null;
+                                  _selectedJobType = null;
+                                  _selectedLevel = null;
+                                });
+                                _fetchJobs(_searchController.text.trim());
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Xóa bộ lọc'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                // Cập nhật state chính của HomeScreen
+                                setState(() {
+                                  _selectedLocation = tempLocation;
+                                  _selectedJobType = tempJobType;
+                                  _selectedLevel = tempLevel;
+                                });
+                                // Tải lại danh sách job với filter mới
+                                _fetchJobs(_searchController.text.trim());
+                                Navigator.pop(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange[700],
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Áp dụng'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Widget hỗ trợ cho Dropdown trong modal
+  Widget _buildFilterDropdown({
+    required String label,
+    required IconData icon,
+    required String? value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.orange[700]),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.grey[100],
+        // Thêm nút "X" để xóa lựa chọn
+        suffixIcon: (value != null)
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 20),
+                onPressed: () => onChanged(null),
+              )
+            : null,
+      ),
+    );
+  }
 } // <--- Dấu } cuối cùng của class _HomeScreenState
 

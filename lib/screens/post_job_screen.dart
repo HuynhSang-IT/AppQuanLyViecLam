@@ -25,8 +25,10 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _requirementsController = TextEditingController();
   final _benefitsController = TextEditingController();
 
-  String _selectedJobType = 'Toàn thời gian';
-  String _selectedLevel = 'Nhân viên';
+  //String _selectedJobType = 'Toàn thời gian';
+  //String _selectedLevel = 'Nhân viên';
+  final TextEditingController _jobTypeController = TextEditingController();
+  final TextEditingController _levelController = TextEditingController();
   bool _isLoading = false;
 
   bool _isEditing = false;
@@ -52,8 +54,13 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _descriptionController.text = _existingJob!.description;
       _requirementsController.text = _existingJob!.requirements ?? '';
       _benefitsController.text = _existingJob!.benefits ?? '';
-      _selectedJobType = _existingJob!.jobType ?? 'Toàn thời gian';
-      _selectedLevel = _existingJob!.level ?? 'Nhân viên';
+      // --- CẬP NHẬT GIÁ TRỊ BAN ĐẦU ---
+      _jobTypeController.text = _existingJob!.jobType ?? 'Toàn thời gian';
+      _levelController.text = _existingJob!.level ?? 'Nhân viên';
+    } else {
+      // Giá trị mặc định nếu là đăng mới
+      _jobTypeController.text = 'Toàn thời gian';
+      _levelController.text = 'Nhân viên';
     }
   }
 
@@ -66,6 +73,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
     _descriptionController.dispose();
     _requirementsController.dispose();
     _benefitsController.dispose();
+    // --- NHỚ DISPOSE ĐỂ TRÁNH RÒ RỈ BỘ NHỚ ---
+    _jobTypeController.dispose();
+    _levelController.dispose();
     super.dispose();
   }
 
@@ -100,8 +110,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
       'description': _descriptionController.text,
       'requirements': _requirementsController.text,
       'benefits': _benefitsController.text.isNotEmpty ? _benefitsController.text : 'Không có',
-      'jobType': _selectedJobType,
-      'level': _selectedLevel,
+      'jobType': _jobTypeController.text, // Thay vì _selectedJobType
+      'level': _levelController.text,     // Thay vì _selectedLevel
       'postedBy': user.uid,
     };
 
@@ -243,28 +253,20 @@ class _PostJobScreenState extends State<PostJobScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildDropdown(
+                          child: _buildEditableDropdown(
+                            controller: _jobTypeController,
                             label: 'Hình thức',
-                            value: _selectedJobType,
+                            icon: Icons.timer_outlined,
                             items: _jobTypes,
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedJobType = value!;
-                              });
-                            },
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _buildDropdown(
+                          child: _buildEditableDropdown(
+                            controller: _levelController,
                             label: 'Cấp bậc',
-                            value: _selectedLevel,
+                            icon: Icons.leaderboard_outlined,
                             items: _levels,
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedLevel = value!;
-                              });
-                            },
                           ),
                         ),
                       ],
@@ -474,6 +476,97 @@ class _PostJobScreenState extends State<PostJobScreen> {
         );
       }).toList(),
       onChanged: onChanged,
+    );
+  }
+  // Widget vừa nhập vừa chọn (Autocomplete)
+  Widget _buildEditableDropdown({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required List<String> items,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Autocomplete<String>(
+          // Giá trị ban đầu
+          initialValue: TextEditingValue(text: controller.text),
+          
+          // Logic lọc danh sách khi gõ
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text == '') {
+              return items; // Hiển thị hết nếu chưa gõ gì
+            }
+            return items.where((String option) {
+              return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+            });
+          },
+          
+          // Xử lý khi chọn từ danh sách
+          onSelected: (String selection) {
+            controller.text = selection;
+          },
+
+          // Giao diện ô nhập liệu
+          fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+            // Đồng bộ controller của Autocomplete với controller của chúng ta
+            if (textController.text != controller.text) {
+               textController.text = controller.text;
+            }
+            // Lắng nghe thay đổi để cập nhật ngược lại controller gốc
+            textController.addListener(() {
+               controller.text = textController.text;
+            });
+
+            return TextFormField(
+              controller: textController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                labelText: label,
+                prefixIcon: Icon(icon),
+                // Thêm icon mũi tên nhỏ để người dùng biết có thể chọn
+                suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+              validator: (val) => val!.isEmpty ? 'Vui lòng nhập $label' : null,
+            );
+          },
+          
+          // Giao diện danh sách gợi ý
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4.0,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: constraints.maxWidth, // Chiều rộng bằng đúng ô nhập
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  color: Colors.white,
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final String option = options.elementAt(index);
+                      return InkWell(
+                        onTap: () => onSelected(option),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(option),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      }
     );
   }
 }

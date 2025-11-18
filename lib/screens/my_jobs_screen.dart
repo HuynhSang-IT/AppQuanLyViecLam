@@ -191,10 +191,16 @@ class _MyJobsScreenState extends State<MyJobsScreen> {
                   icon: const Icon(Icons.people_outline, size: 18, color: Colors.blue),
                   label: const Text('Ứng viên', style: TextStyle(color: Colors.blue)),
                   onPressed: () {
-                    // Truyền cả object Job đi
-                    Navigator.pushNamed(context, '/job_applicants', arguments: job);
+                    Navigator.pushNamed(
+                      context,
+                      '/job_applicants',
+                      arguments: {
+                        'jobId': job.id,      // ✅ TRUYỀN MAP
+                        'jobTitle': job.title, // ✅ TRUYỀN MAP
+                      },
+                    );
                   },
-                ),
+                ),  
                 const Spacer(), // Đẩy các nút khác ra xa
                 TextButton.icon(
                 icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.orange),
