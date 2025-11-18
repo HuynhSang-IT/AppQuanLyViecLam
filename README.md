@@ -47,7 +47,7 @@ url_launcher: Mở liên kết ngoài/gọi điện.
 
 🚀 Hướng Dẫn Cài Đặt (Installation)
 Để chạy dự án này trên máy của bạn:
-1. Clone dự án: git clone https://github.com/username/career-chase.git
+1. Clone dự án: git clone https://github.com/HuynhSang-IT/AppQuanLyViecLam.git
 cd career-chase.
 2. Cài đặt thư viện: flutter pub get
 3. Cấu hình Firebase:
